@@ -1,84 +1,63 @@
-/////////////////////////////////////////////////////////////////////////////
-// The Software is provided "AS IS" and possibly with faults. 
-// Intel disclaims any and all warranties and guarantees, express, implied or
-// otherwise, arising, with respect to the software delivered hereunder,
-// including but not limited to the warranty of merchantability, the warranty
-// of fitness for a particular purpose, and any warranty of non-infringement
-// of the intellectual property rights of any third party.
-// Intel neither assumes nor authorizes any person to assume for it any other
-// liability. Customer will use the software at its own risk. Intel will not
-// be liable to customer for any direct or indirect damages incurred in using
-// the software. In no event will Intel be liable for loss of profits, loss of
-// use, loss of data, business interruption, nor for punitive, incidental,
-// consequential, or special damages of any kind, even if advised of
-// the possibility of such damages.
-//
-// Copyright (c) 2003 Intel Corporation
-//
-// Third-party brands and names are the property of their respective owners
-//
 ///////////////////////////////////////////////////////////////////////////
-// Random Number Generation for SSE / SSE2
+// Random Number Generation for NEON (ARM AArch64)
 // Source File
 // Version 0.1
-// Author Kipp Owens, Rajiv Parikh
 ////////////////////////////////////////////////////////////////////////
-#ifndef RAND_SSE_H
-#define RAND_SSE_H
-#include "emmintrin.h"
+#ifndef RAND_NEON_H
+#define RAND_NEON_H
+#include <arm_neon.h>
 
 #define COMPATABILITY
 
-//#include "sse2rng.h"
-//define this if you wish to return values similar to the standard rand();
-//void srand_sse( unsigned int seed ) { ; }
-//void rand_sse( unsigned int* value) { *value = 5; }
-//__attribute__(( aligned (16) )) static __m128i cur_seed;
-__thread __attribute__(( aligned (16) )) static __m128i cur_seed;
+__thread static int32x4_t cur_seed;
 
-void srand_sse( unsigned int seed )
+void srand_neon(unsigned int seed)
 {
-		cur_seed = _mm_set_epi32( seed, seed+1, seed, seed+1 );
+    cur_seed = vsetq_lane_s32(seed, cur_seed, 0);
+    cur_seed = vsetq_lane_s32(seed + 1, cur_seed, 1);
+    cur_seed = vsetq_lane_s32(seed, cur_seed, 2);
+    cur_seed = vsetq_lane_s32(seed + 1, cur_seed, 3);
 }
 
-//inline void rand_sse( unsigned int* result )
-void rand_sse( unsigned int* result )
+void rand_neon(unsigned int* result)
 {
-		__attribute__(( aligned (16) )) __m128i cur_seed_split;
-		__attribute__(( aligned (16) )) __m128i multiplier;
-		__attribute__(( aligned (16) )) __m128i adder;
-		__attribute__(( aligned (16) )) __m128i mod_mask;
-		__attribute__(( aligned (16) )) __m128i sra_mask;
-		__attribute__(( aligned (16) )) __m128i sseresult;
-		__attribute__(( aligned (16) )) static const unsigned int mult[4] =
-				{ 214013, 17405, 214013, 69069 };
-		__attribute__(( aligned (16) )) static const unsigned int gadd[4] =
-				{ 2531011, 10395331, 13737667, 1 };
-		__attribute__(( aligned (16) )) static const unsigned int mask[4] =
-				{ 0xFFFFFFFF, 0, 0xFFFFFFFF, 0 };
-		__attribute__(( aligned (16) )) static const unsigned int masklo[4] =
-				{ 0x00007FFF, 0x00007FFF, 0x00007FFF, 0x00007FFF };
-		adder = _mm_load_si128( (__m128i*) gadd);
-		multiplier = _mm_load_si128( (__m128i*) mult);
-		mod_mask = _mm_load_si128( (__m128i*) mask);
-		sra_mask = _mm_load_si128( (__m128i*) masklo);
-		cur_seed_split = _mm_shuffle_epi32( cur_seed, _MM_SHUFFLE( 2, 3, 0, 1 ) );
-		cur_seed = _mm_mul_epu32( cur_seed, multiplier );
-		multiplier = _mm_shuffle_epi32( multiplier, _MM_SHUFFLE( 2, 3, 0, 1 ) );
-		cur_seed_split = _mm_mul_epu32( cur_seed_split, multiplier );
-		cur_seed = _mm_and_si128( cur_seed, mod_mask);
-		cur_seed_split = _mm_and_si128( cur_seed_split, mod_mask );
-		cur_seed_split = _mm_shuffle_epi32( cur_seed_split, _MM_SHUFFLE( 2, 3, 0, 1 ) );
-		cur_seed = _mm_or_si128( cur_seed, cur_seed_split );
-		cur_seed = _mm_add_epi32( cur_seed, adder);
-		#ifdef COMPATABILITY
-		// Add the lines below if you wish to reduce your results to 16-bit vals...
-		sseresult = _mm_srai_epi32( cur_seed, 16);
-		sseresult = _mm_and_si128( sseresult, sra_mask );
-		_mm_storeu_si128( (__m128i*) result, sseresult );
-		return;
-		#endif
-		_mm_storeu_si128( (__m128i*) result, cur_seed);
-		return;
-}
+    int32x4_t cur_seed_split;
+    int32x4_t multiplier;
+    int32x4_t adder;
+    int32x4_t mod_mask;
+    int32x4_t sra_mask;
+    int32x4_t neon_result;
+
+    static const unsigned int mult[4] = {214013, 17405, 214013, 69069};
+    static const unsigned int gadd[4] = {2531011, 10395331, 13737667, 1};
+    static const unsigned int mask[4] = {0xFFFFFFFF, 0, 0xFFFFFFFF, 0};
+    static const unsigned int masklo[4] = {0x00007FFF, 0x00007FFF, 0x00007FFF, 0x00007FFF};
+
+    adder = vld1q_s32((const int32_t*) gadd);
+    multiplier = vld1q_s32((const int32_t*) mult);
+    mod_mask = vld1q_s32((const int32_t*) mask);
+    sra_mask = vld1q_s32((const int32_t*) masklo);
+
+    cur_seed_split = vextq_s32(cur_seed, cur_seed, 2);  // Shuffle equivalent
+    cur_seed = vmulq_n_u32(cur_seed, vgetq_lane_s32(multiplier, 0)); // Multiply lower 32-bit integers
+    multiplier = vextq_s32(multiplier, multiplier, 2);  // Shuffle multiplier
+    cur_seed_split = vmulq_n_u32(cur_seed_split, vgetq_lane_s32(multiplier, 0));  // Multiply split
+    cur_seed = vandq_u32(cur_seed, mod_mask);  // Mask
+    cur_seed_split = vandq_u32(cur_seed_split, mod_mask);  // Mask split
+    cur_seed_split = vextq_s32(cur_seed_split, cur_seed_split, 2);  // Shuffle
+    cur_seed = vorrq_u32(cur_seed, cur_seed_split);  // Combine
+    cur_seed = vaddq_s32(cur_seed, adder);  // Add
+
+#ifdef COMPATABILITY
+    // Reduce results to 16-bit values
+    neon_result = vshrq_n_s32(cur_seed, 16);
+    neon_result = vandq_u32(neon_result, sra_mask);
+    vst1q_u32(result, neon_result);  // Store result
+    return;
 #endif
+
+    vst1q_u32(result, cur_seed);  // Store full result
+}
+
+#endif
+
