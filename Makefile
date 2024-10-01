@@ -36,7 +36,7 @@ endif
 #CFLAGS += -DMANYBAGS
 #endif
 
-INCLUDE_DIRS = -I. -I/usr/include/x86_64-linux-gnu/c++/4.8/ -I./rng
+INCLUDE_DIRS = -I. -I/usr/include/aarch64-linux-gnu/c++/11/ -I./rng
 LIBS     := dl pthread
 
 ifdef ARC4RNG
@@ -44,7 +44,7 @@ CFLAGS += -DARC4RNG
 SRCS += rng/arc4random.o rng/arc4random_uniform.o
 TARGETS = arc4random.o arc4random_uniform.o $(TARGETS)
 else
-CFLAGS += -DSSE2RNG -msse2
+CFLAGS += -DSSE2RNG
 SRCS += rng/sse2rng.c
 endif
 CFLAGS += -DUSE_GLOBAL_FREE_CACHE
